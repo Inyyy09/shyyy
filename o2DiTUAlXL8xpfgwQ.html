@@ -1,0 +1,426 @@
+<html><head><base href="." target="_blank">
+<meta charset="UTF-8">
+<title>Coquette Snake Game</title>
+<style>
+  body {
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #fce4ec;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  .game-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .left-panel {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 4px solid #ff80ab;
+    width: 200px;
+  }
+
+  .right-panel {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 4px solid #ff80ab;
+    width: 200px;
+    text-align: center;
+  }
+
+  #gameCanvas {
+    border: 4px solid #ff80ab;
+    border-radius: 10px;
+    background: #fff;
+    display: none;
+  }
+
+  .score {
+    font-size: 24px;
+    color: #c2185b;
+    margin: 10px 0;
+    display: none;
+  }
+
+  .level {
+    font-size: 20px;
+    color: #c2185b;
+    margin: 10px 0;
+    display: none;
+  }
+
+  .campaign-goal {
+    color: #c2185b;
+    margin: 10px 0;
+    font-size: 16px;
+    display: none;
+  }
+
+  .instructions {
+    color: #880e4f;
+    text-align: left;
+    display: none;
+  }
+
+  .game-over {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 128, 171, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    text-align: center;
+  }
+
+  .start-screen {
+    text-align: center;
+    color: #c2185b;
+    margin: 20px;
+  }
+
+  .mode-select {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .mode-button {
+    margin: 5px;
+    padding: 15px 30px;
+    font-size: 18px;
+    background: #f8bbd0;
+    border: none;
+    border-radius: 25px;
+    color: #880e4f;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .mode-button:hover {
+    background: #f48fb1;
+    transform: scale(1.05);
+  }
+
+  .mode-button.active {
+    background: #ff4081;
+    color: white;
+  }
+
+  .bonus {
+    position: absolute;
+    font-size: 16px;
+    color: #ff4081;
+    font-weight: bold;
+    animation: fadeUp 1s forwards;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+  }
+</style>
+</head>
+<body>
+<h1 style="text-align: center; color: #c2185b;">🐍 Coquette Snake Game 💖</h1>
+
+<div class="game-container">
+  <div class="left-panel">
+    <h1 class="score">Score: <span id="score">0</span></h1>
+    <h2 class="level">Level: <span id="level">1</span></h2>
+    <div class="campaign-goal">Goal: <span id="levelGoal">100</span> points</div>
+    <div class="instructions">
+      <h3>How to Play:</h3>
+      <p>🎮 Controls:</p>
+      <ul>
+        <li>Arrow Keys or WASD to move</li>
+        <li>↑ or W: Move Up</li>
+        <li>↓ or S: Move Down</li>
+        <li>← or A: Move Left</li>
+        <li>→ or D: Move Right</li>
+      </ul>
+      <p>🎯 Goal:</p>
+      <ul>
+        <li>Collect pink hearts 💖</li>
+        <li>Grow your snake 🐍</li>
+        <li>Avoid walls and yourself!</li>
+      </ul>
+    </div>
+  </div>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <div class="right-panel">
+    <h3>Select Game Mode:</h3>
+    <div class="mode-select">
+      <button class="mode-button active" onclick="selectMode('classic')">Classic Mode</button>
+      <button class="mode-button" onclick="selectMode('campaign')">Campaign Mode</button>
+    </div>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+</div>
+
+<div id="gameOver" class="game-over">
+  <h2>Game Over!</h2>
+  <p>Final Score: <span id="finalScore">0</span></p>
+  <p>Level Reached: <span id="finalLevel">1</span></p>
+  <button onclick="restartGame()">Play Again</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+const levelElement = document.getElementById('level');
+const gameOverElement = document.getElementById('gameOver');
+const finalScoreElement = document.getElementById('finalScore');
+const finalLevelElement = document.getElementById('finalLevel');
+
+const gridSize = 20;
+const tileCount = canvas.width / gridSize;
+
+let snake = [
+  { x: 10, y: 10 }
+];
+let food = { x: 5, y: 5 };
+let dx = 0;
+let dy = 0;
+let score = 0;
+let level = 1;
+let pointsToNextLevel = 100;
+let gameLoop;
+let speed = 150;
+let gameStarted = false;
+let gameMode = 'classic';
+let levelGoal = 100;
+
+function showBonusText(x, y, text) {
+  const bonus = document.createElement('div');
+  bonus.className = 'bonus';
+  bonus.style.left = `${x}px`;
+  bonus.style.top = `${y}px`;
+  bonus.textContent = text;
+  document.body.appendChild(bonus);
+  setTimeout(() => bonus.remove(), 1000);
+}
+
+function updateLevel() {
+  if (gameMode === 'classic') {
+    if (score >= pointsToNextLevel) {
+      level++;
+      levelElement.textContent = level;
+      pointsToNextLevel += level * 100;
+      speed = Math.max(50, 150 - (level * 10));
+      clearInterval(gameLoop);
+      gameLoop = setInterval(gameStep, speed);
+      
+      const canvasRect = canvas.getBoundingClientRect();
+      showBonusText(
+        canvasRect.left + canvas.width/2,
+        canvasRect.top + canvas.height/2,
+        `Level ${level}! 🎉`
+      );
+    }
+  } else if (gameMode === 'campaign') {
+    if (score >= levelGoal) {
+      level++;
+      levelElement.textContent = level;
+      levelGoal = level * 100;
+      document.getElementById('levelGoal').textContent = levelGoal;
+      speed = Math.max(50, 150 - (level * 10));
+      clearInterval(gameLoop);
+      gameLoop = setInterval(gameStep, speed);
+      
+      const canvasRect = canvas.getBoundingClientRect();
+      showBonusText(
+        canvasRect.left + canvas.width/2,
+        canvasRect.top + canvas.height/2,
+        `Level ${level}! 🎉`
+      );
+    }
+  }
+}
+
+function selectMode(mode) {
+  gameMode = mode;
+  document.querySelectorAll('.mode-button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  if (mode === 'campaign') {
+    document.querySelector('.campaign-goal').style.display = 'block';
+  } else {
+    document.querySelector('.campaign-goal').style.display = 'none';
+  }
+}
+
+function startGame() {
+  if (!gameStarted) {
+    gameStarted = true;
+    document.querySelector('.right-panel').style.display = 'none';
+    canvas.style.display = 'block';
+    document.querySelector('.score').style.display = 'block';
+    document.querySelector('.level').style.display = 'block';
+    document.querySelector('.instructions').style.display = 'block';
+    if (gameMode === 'campaign') {
+      document.querySelector('.campaign-goal').style.display = 'block';
+    }
+    generateFood();
+    gameLoop = setInterval(gameStep, speed);
+  }
+}
+
+function drawSnakePart(part) {
+  ctx.fillStyle = '#ff4081';
+  ctx.strokeStyle = '#c2185b';
+  ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
+  ctx.strokeRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
+}
+
+function drawFood() {
+  ctx.beginPath();
+  ctx.fillStyle = '#ff80ab';
+  const centerX = food.x * gridSize + gridSize/2;
+  const centerY = food.y * gridSize + gridSize/2;
+  
+  ctx.moveTo(centerX, centerY + 4);
+  ctx.bezierCurveTo(centerX - 8, centerY - 8, centerX - 8, centerY - 12, centerX, centerY - 4);
+  ctx.bezierCurveTo(centerX + 8, centerY - 12, centerX + 8, centerY - 8, centerX, centerY + 4);
+  ctx.fill();
+}
+
+function clearCanvas() {
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function moveSnake() {
+  const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score += 10 * level;
+    scoreElement.textContent = score;
+    updateLevel();
+    generateFood();
+    speed = Math.max(50, speed - 2);
+    clearInterval(gameLoop);
+    gameLoop = setInterval(gameStep, speed);
+  } else {
+    snake.pop();
+  }
+}
+
+function generateFood() {
+  food = {
+    x: Math.floor(Math.random() * tileCount),
+    y: Math.floor(Math.random() * tileCount)
+  };
+  
+  for (let part of snake) {
+    if (food.x === part.x && food.y === part.y) {
+      generateFood();
+      break;
+    }
+  }
+}
+
+function checkCollision() {
+  const head = snake[0];
+  
+  if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+    return true;
+  }
+  
+  for (let i = 1; i < snake.length; i++) {
+    if (head.x === snake[i].x && head.y === snake[i].y) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+function gameStep() {
+  if (checkCollision()) {
+    clearInterval(gameLoop);
+    gameOverElement.style.display = 'block';
+    finalScoreElement.textContent = score;
+    finalLevelElement.textContent = level;
+    return;
+  }
+
+  clearCanvas();
+  moveSnake();
+  drawFood();
+  snake.forEach(drawSnakePart);
+}
+
+function handleKeyPress(e) {
+  switch(e.key) {
+    case 'ArrowUp':
+    case 'w':
+    case 'W':
+      if (dy !== 1) { dx = 0; dy = -1; }
+      break;
+    case 'ArrowDown':
+    case 's':
+    case 'S':
+      if (dy !== -1) { dx = 0; dy = 1; }
+      break;
+    case 'ArrowLeft':
+    case 'a':
+    case 'A':
+      if (dx !== 1) { dx = -1; dy = 0; }
+      break;
+    case 'ArrowRight':
+    case 'd':
+    case 'D':
+      if (dx !== -1) { dx = 1; dy = 0; }
+      break;
+  }
+}
+
+function restartGame() {
+  snake = [{ x: 10, y: 10 }];
+  dx = 0;
+  dy = 0;
+  score = 0;
+  level = 1;
+  levelGoal = 100;
+  document.getElementById('levelGoal').textContent = levelGoal;
+  pointsToNextLevel = 100;
+  speed = 150;
+  scoreElement.textContent = '0';
+  levelElement.textContent = '1';
+  generateFood();
+  gameOverElement.style.display = 'none';
+  canvas.style.display = 'block';
+  document.querySelector('.score').style.display = 'block';
+  document.querySelector('.level').style.display = 'block';
+  document.querySelector('.instructions').style.display = 'block';
+  document.querySelector('.right-panel').style.display = 'none';
+  if (gameMode === 'campaign') {
+    document.querySelector('.campaign-goal').style.display = 'block';
+  }
+  clearInterval(gameLoop);
+  gameLoop = setInterval(gameStep, speed);
+}
+
+document.addEventListener('keydown', handleKeyPress);
+</script>
+</body></html>
